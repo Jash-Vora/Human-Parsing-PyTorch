@@ -71,7 +71,7 @@ class LIPDataSet(data.Dataset):
         im = cv2.imread(im_path, cv2.IMREAD_COLOR)
         im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
         h, w, _ = im.shape
-        parsing_anno = np.zeros((h, w), dtype=np.long)
+        parsing_anno = np.zeros((h, w), dtype=np.int64)
 
         # Get center and scale
         center, s = self._box2cs([0, 0, w - 1, h - 1])
