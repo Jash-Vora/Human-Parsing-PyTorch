@@ -3,26 +3,16 @@ import numpy as np
 import random
 import torch
 import cv2
-import json
-import sys
-sys.path.insert(0, '.')
 from torch.utils import data
-from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-from dataset.target_generation import generate_edge, generate_hw_gt
 from utils.transforms import get_affine_transform
 from utils.ImgTransforms import AugmentationBlock, autoaug_imagenet_policies
-from utils.utils import decode_parsing
+from dataset.target_generation import generate_edge, generate_hw_gt
 
-
-
-# statisticSeg=[ 30462,7026,21054,2404,1660,23165,1201,8182,2178,16224,
-#                455,518,634,24418,18539,20033,4763,4832,8126,8166]
 class LIPDataSet(data.Dataset):
     def __init__(self, root, dataset, crop_size=[473, 473], scale_factor=0.25,
                  rotation_factor=30, ignore_label=255, transform=None):
         """
-        :rtype:
+        Dataset for LIP parsing task with training augmentation and preprocessing.
         """
         self.root = root
         self.aspect_ratio = crop_size[1] * 1.0 / crop_size[0]
@@ -34,22 +24,14 @@ class LIPDataSet(data.Dataset):
         self.flip_pairs = [[0, 5], [1, 4], [2, 3], [11, 14], [12, 13], [10, 15]]
         self.transform = transform
         self.dataset = dataset
-        # self.statSeg = np.array( statisticSeg, dtype ='float')
-        # self.statSeg = self.statSeg/30462       
 
-        list_path = os.path.join(self.root, self.dataset + '_id.txt')
-
+        list_path = os.path.join(self.root, f'{dataset}_id.txt')
         self.im_list = [i_id.strip() for i_id in open(list_path)]
-        # if dataset != 'val':
-        #     im_list_2 = []
-        #     for i in range(len(self.im_list)):
-        #         if i % 5 ==0:
-        #             im_list_2.append(self.im_list[i])
-        #     self.im_list = im_list_2
         self.number_samples = len(self.im_list)
-        #================================================================================
-        self.augBlock = AugmentationBlock( autoaug_imagenet_policies )
-        #================================================================================
+
+        # Augmentation block
+        self.augBlock = AugmentationBlock(autoaug_imagenet_policies)
+
     def __len__(self):
         return self.number_samples
 
@@ -66,23 +48,22 @@ class LIPDataSet(data.Dataset):
         elif w < self.aspect_ratio * h:
             w = h * self.aspect_ratio
         scale = np.array([w * 1.0, h * 1.0], dtype=np.float32)
-
         return center, scale
 
     def __getitem__(self, index):
-        # Load training image
         im_name = self.im_list[index]
 
-        im_path = os.path.join(self.root, self.dataset + '_images', im_name + '.jpg')
-        #print(im_path)
-        parsing_anno_path = os.path.join(self.root, self.dataset + '_segmentations', im_name + '.png')
+        subfolder = {
+            'train': 'Training',
+            'val': 'Validation',
+            'test': 'Testing'
+        }[self.dataset]
+
+        im_path = os.path.join(self.root, subfolder, 'Images', im_name + '.jpg')
+        parsing_anno_path = os.path.join(self.root, subfolder, 'Segmentations', im_name + '.png')
 
         im = cv2.imread(im_path, cv2.IMREAD_COLOR)
         im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-        #=================================================
-        if self.dataset != 'val':
-            im = self.augBlock( im )
-        #=================================================
         h, w, _ = im.shape
         parsing_anno = np.zeros((h, w), dtype=np.long)
 
@@ -90,11 +71,10 @@ class LIPDataSet(data.Dataset):
         center, s = self._box2cs([0, 0, w - 1, h - 1])
         r = 0
 
-        if self.dataset != 'test': 
+        if self.dataset != 'test':
             parsing_anno = cv2.imread(parsing_anno_path, cv2.IMREAD_GRAYSCALE)
 
-            if self.dataset == 'train' or self.dataset == 'trainval':
-
+            if self.dataset == 'train':
                 sf = self.scale_factor
                 rf = self.rotation_factor
                 s = s * np.clip(np.random.randn() * sf + 1, 1 - sf, 1 + sf)
@@ -104,15 +84,7 @@ class LIPDataSet(data.Dataset):
                 if random.random() <= self.flip_prob:
                     im = im[:, ::-1, :]
                     parsing_anno = parsing_anno[:, ::-1]
-
                     center[0] = im.shape[1] - center[0] - 1
-                    right_idx = [15, 17, 19]
-                    left_idx = [14, 16, 18]
-                    for i in range(0, 3):
-                        right_pos = np.where(parsing_anno == right_idx[i])
-                        left_pos = np.where(parsing_anno == left_idx[i])
-                        parsing_anno[right_pos[0], right_pos[1]] = left_idx[i]
-                        parsing_anno[left_pos[0], left_pos[1]] = right_idx[i]
 
         trans = get_affine_transform(center, s, r, self.crop_size)
         input = cv2.warpAffine(
@@ -145,14 +117,13 @@ class LIPDataSet(data.Dataset):
                 flags=cv2.INTER_NEAREST,
                 borderMode=cv2.BORDER_CONSTANT,
                 borderValue=(255))
+            hgt, wgt, hwgt = generate_hw_gt(label_parsing)
 
-            # label_edge = generate_edge(label_parsing)
-            hgt, wgt, hwgt = generate_hw_gt(label_parsing)                   
-            label_parsing = torch.from_numpy(label_parsing)           
-            # label_edge = torch.from_numpy(label_edge) 
+            label_parsing = torch.from_numpy(label_parsing)
+            return input, label_parsing, hgt, wgt, hwgt, meta
 
-            return input, label_parsing, hgt,wgt,hwgt, meta
 
+# For validation set
 class LIPDataValSet(data.Dataset):
     def __init__(self, root, dataset='val', crop_size=[512, 512], transform=None, flip=False):
         self.root = root
@@ -160,14 +131,9 @@ class LIPDataValSet(data.Dataset):
         self.transform = transform
         self.flip = flip
         self.dataset = dataset
-        self.root = root
-        self.aspect_ratio = crop_size[1] * 1.0 / crop_size[0]
-        self.crop_size = np.asarray(crop_size)
 
-        list_path = os.path.join(self.root, self.dataset + '_id.txt')
-        val_list = [i_id.strip() for i_id in open(list_path)]
-
-        self.val_list = val_list
+        list_path = os.path.join(self.root, f'{dataset}_id.txt')
+        self.val_list = [i_id.strip() for i_id in open(list_path)]
         self.number_samples = len(self.val_list)
 
     def __len__(self):
@@ -186,17 +152,17 @@ class LIPDataValSet(data.Dataset):
         elif w < self.aspect_ratio * h:
             w = h * self.aspect_ratio
         scale = np.array([w * 1.0, h * 1.0], dtype=np.float32)
-
         return center, scale
 
     def __getitem__(self, index):
         val_item = self.val_list[index]
-        # Load training image
-        im_path = os.path.join(self.root, self.dataset + '_images', val_item + '.jpg')
+
+        subfolder = 'Validation'
+        im_path = os.path.join(self.root, subfolder, 'Images', val_item + '.jpg')
         im = cv2.imread(im_path, cv2.IMREAD_COLOR)
         im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
         h, w, _ = im.shape
-        # Get person center and scale
+
         person_center, s = self._box2cs([0, 0, w - 1, h - 1])
         r = 0
         trans = get_affine_transform(person_center, s, r, self.crop_size)
@@ -207,12 +173,12 @@ class LIPDataValSet(data.Dataset):
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=(0, 0, 0))
-        input = self.transform(input)
-        flip_input = input.flip(dims=[-1])
-        if self.flip:
-            batch_input_im = torch.stack([input, flip_input])
-        else:
-            batch_input_im = input
+
+        if self.transform:
+            input = self.transform(input)
+
+        flip_input = input.flip(dims=[-1]) if self.flip else None
+        batch_input_im = torch.stack([input, flip_input]) if self.flip else input
 
         meta = {
             'name': val_item,
@@ -224,36 +190,3 @@ class LIPDataValSet(data.Dataset):
         }
 
         return batch_input_im, meta
-
-'''
-root = '/home/vrushank/Spyne/CCIHP'
-dataset = 'train'
-data1 = LIPDataValSet(root, dataset, crop_size=[512, 512])
-loader = DataLoader(data1, batch_size = 1, shuffle = True)
-
-for idx, (input, label_parsing, hgt,wgt,hwgt, meta) in enumerate(loader):
-
-    if idx == 0:
-
-        print(input.shape)
-        print(label_parsing.shape)
-
-        ip = input.squeeze(0).cpu().numpy()
-        label = decode_parsing(label_parsing, num_classes = 22)
-        print(type(label))
-        label = label[0].data.cpu().numpy()
-        label = label.transpose((1,2,0))
-        #label = cv2.cvtColor(label, cv2.COLOR_GRAY2BGR)
-        print(ip.shape)
-        print(label.shape)
-        res = np.concatenate((ip, label), axis = 1)
-        plt.imshow(res)
-        plt.show()
-        #print(f'{hgt}: {hgt.shape}')
-        #print(f'{wgt}: {wgt.shape}')
-        #print(f'{hwgt}: {hwgt.shape}')
-    
-    else:
-
-        break
-'''
