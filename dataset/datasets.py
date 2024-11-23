@@ -25,7 +25,13 @@ class LIPDataSet(data.Dataset):
         self.transform = transform
         self.dataset = dataset
 
-        list_path = os.path.join(self.root, f'{dataset}_id.txt')
+        subfolder = {
+            'train': 'Training',
+            'val': 'Validation',
+            'test': 'Testing'
+        }[dataset]
+
+        list_path = os.path.join(self.root, subfolder, f'{dataset}_id.txt')
         self.im_list = [i_id.strip() for i_id in open(list_path)]
         self.number_samples = len(self.im_list)
 
@@ -132,7 +138,8 @@ class LIPDataValSet(data.Dataset):
         self.flip = flip
         self.dataset = dataset
 
-        list_path = os.path.join(self.root, f'{dataset}_id.txt')
+        subfolder = 'Validation'
+        list_path = os.path.join(self.root, subfolder, f'{dataset}_id.txt')
         self.val_list = [i_id.strip() for i_id in open(list_path)]
         self.number_samples = len(self.val_list)
 
