@@ -329,21 +329,34 @@ def apply_augment(img, name, level):
     return augment_fn(img.copy(), level * (high - low) + low)
 class PILGaussianBlur(ImageFilter.Filter):
     name = "GaussianBlur"
+
     def __init__(self, radius=2, bounds=None):
+        # Convert radius to a 2-item sequence if it's an integer
+        if isinstance(radius, int):
+            radius = (radius, radius)
         self.radius = radius
         self.bounds = bounds
+
     def filter(self, image):
         if self.bounds:
+            # Crop the image within the bounds and apply gaussian_blur
             clips = image.crop(self.bounds).gaussian_blur(self.radius)
+            # Paste the blurred region back into the original image
             image.paste(clips, self.bounds)
             return image
         else:
+            # Apply gaussian_blur to the entire image
             return image.gaussian_blur(self.radius)
+
+
 class GaussianBlur(object):
-    def __init__(self, radius=2 ):
-        self.GaussianBlur=PILGaussianBlur(radius)
+    def __init__(self, radius=2):
+        # Initialize PILGaussianBlur with the radius
+        self.GaussianBlur = PILGaussianBlur(radius)
+
     def __call__(self, img):
-        img = img.filter( self.GaussianBlur )
+        # Apply the filter to the image
+        img = img.filter(self.GaussianBlur)
         return img
 class AugmentationBlock(object):
     r"""
