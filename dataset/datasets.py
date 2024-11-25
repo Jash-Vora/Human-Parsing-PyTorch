@@ -84,7 +84,7 @@ class LIPDataSet(data.Dataset):
             im = self.augBlock( im )
         #=================================================
         h, w, _ = im.shape
-        parsing_anno = np.zeros((h, w), dtype=np.long)
+        parsing_anno = np.zeros((h, w), dtype=np.int64)
 
         # Get center and scale
         center, s = self._box2cs([0, 0, w - 1, h - 1])
