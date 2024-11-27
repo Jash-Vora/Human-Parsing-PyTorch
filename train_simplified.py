@@ -227,14 +227,14 @@ def train(loader, valid_loader, model, opt, scaler, criterion, total_iters, epoc
             op_label_wb = wandb.Image(op_img)
             wandb.log({'Valid Pred': op_label_wb})
 
-        save_path = '/kaggle/working/model_epoch_{epoch}.pth'
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': opt.state_dict(),
-            'scaler_state_dict': scaler.state_dict()
-        }, save_path)
-        print(f'Model saved to {save_path}')
+    save_path = f'/kaggle/working/model_epoch_{epoch}.pth'
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': opt.state_dict(),
+        'scaler_state_dict': scaler.state_dict()
+    }, save_path)
+    print(f'Model saved to {save_path}')
 
 
 def main():
