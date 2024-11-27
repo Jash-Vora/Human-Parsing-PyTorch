@@ -6,7 +6,7 @@ import cv2
 import torch
 from torch.nn import functional as F
 
-def generate_hw_gt( target, class_num = 22 ):
+def generate_hw_gt( target, class_num = 59 ):
     h,w = target.shape   
     target = torch.from_numpy(target)
     target_c = target.clone()
